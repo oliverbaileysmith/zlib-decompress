@@ -43,6 +43,42 @@ class ByteStreamer:
 			bits |= self.read_bit() << i
 		return bits
 
+# Inflate block where BTYPE == 0b00
+def inflate_block_no_compression(streamer, out_data):
+	# read_bytes will discard remaining bits after BTYPE until next byte boundary
+	LEN = streamer.read_bytes(2)
+	NLEN = streamer.read_bytes(2)
+
+	for i in range(LEN):
+		out_data.append(streamer.read_byte())
+
+#Inflate block where BTYPE == 0b01
+def inflate_block_fixed_huffman(streamer, out_data):
+	return
+
+#Inflate block where BTYPE == 0b10
+def inflate_block_dynamic_huffman(streamer, out_data):
+	return
+
+def inflate(streamer):
+	# BFINAL indicates final block in DEFLATE stream
+	BFINAL = 0
+	inflated_data = []
+
+	while not BFINAL:
+		BFINAL = streamer.read_bit()
+		BTYPE = streamer.read_bits(2)
+		assert(BTYPE != 0b11), "BTYPE == 3 invalid"
+
+		if BTYPE == 0b00:
+			inflate_block_no_compression(streamer, inflated_data)
+		elif BTYPE == 0b01:
+			inflate_block_fixed_huffman(streamer, inflated_data)
+		elif BTYPE == 0b10:
+			inflate_block_dynamic_huffman(streamer, inflated_data)
+
+	return bytes(inflated_data)
+
 def decompress(memory):
 	streamer = ByteStreamer(memory)
 
@@ -50,28 +86,28 @@ def decompress(memory):
 	# Compression method
 	CM = CMF & 0b1111
 	# CM == 8 means DEFLATE compression
-	assert(CM == 8), "Invalid CM: CM != 8 not supported"
+	assert(CM == 8), "CM != 8 invalid"
 
 	# Compression info
 	CINFO = CMF >> 4
 	# CINFO > 7 means LZ77 window size would exceed maximum in specification
-	assert(CINFO <= 7), "Invalid CINFO: CINFO > 7 not supported"
+	assert(CINFO <= 7), "CINFO > 7 invalid"
 
 	FLG = streamer.read_byte()
 	assert((CMF * 256 + FLG) % 31 == 0), "CMF and FLG checksum failed"
 
 	# Preset dictionary
 	FDICT = (FLG >> 5) & 1
-	assert(FDICT == 0), "Preset dictionary not supported"
+	assert(FDICT == 0), "FDICT == 1 not supported"
 
 	# Decompress DEFLATE data
-	# data = inflate(streamer)
+	data = inflate(streamer)
 
 	# ALDER32 checksum
 	ALDER32 = streamer.read_bytes(4)
 
-	# return data
+	return data
 
 import zlib
-x = zlib.compress(b'Hello World!')
+x = zlib.compress(b'The quick brown fox jumped over the lazy dog', level = 0)
 print(decompress(x))
