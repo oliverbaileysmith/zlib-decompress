@@ -18,10 +18,10 @@ class ByteStreamer:
 
 	# Read next n bytes from stream starting from next byte boundary
 	def read_bytes(self, n):
-		out = 0
+		bytes = 0
 		for i in range(n):
-			out |= self.read_byte() << (8 * i)
-		return out
+			bytes |= self.read_byte() << (8 * i)
+		return bytes
 
 	# Read next bit from stream
 	def read_bit(self):
@@ -38,7 +38,40 @@ class ByteStreamer:
 
 	# Read next n bits from stream
 	def read_bits(self, n):
-		out = 0
+		bits = 0
 		for i in range(n):
-			out |= self.read_bit() << i
-		return out
+			bits |= self.read_bit() << i
+		return bits
+
+def decompress(memory):
+	streamer = ByteStreamer(memory)
+
+	CMF = streamer.read_byte()
+	# Compression method
+	CM = CMF & 0b1111
+	# CM == 8 means DEFLATE compression
+	assert(CM == 8), "Invalid CM: CM != 8 not supported"
+
+	# Compression info
+	CINFO = CMF >> 4
+	# CINFO > 7 means LZ77 window size would exceed maximum in specification
+	assert(CINFO <= 7), "Invalid CINFO: CINFO > 7 not supported"
+
+	FLG = streamer.read_byte()
+	assert((CMF * 256 + FLG) % 31 == 0), "CMF and FLG checksum failed"
+
+	# Preset dictionary
+	FDICT = (FLG >> 5) & 1
+	assert(FDICT == 0), "Preset dictionary not supported"
+
+	# Decompress DEFLATE data
+	# data = inflate(streamer)
+
+	# ALDER32 checksum
+	ALDER32 = streamer.read_bytes(4)
+
+	# return data
+
+import zlib
+x = zlib.compress(b'Hello World!')
+print(decompress(x))
