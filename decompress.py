@@ -43,6 +43,21 @@ class ByteStreamer:
 			bits |= self.read_bit() << i
 		return bits
 
+# Write n bits from coded_bits into bytes according to DEFLATE specification
+def huffman_coded_bits_to_bytes(coded_bits, n):
+	result = []
+	result.append(0)
+	bit_index = 0
+
+	for i in range(n-1, -1, -1):
+		if bit_index > 7:
+			result.append(0)
+			bit_index = 0
+		result[-1] |= ((coded_bits >> i) & 1) << bit_index
+		bit_index += 1
+	
+	return bytes(result)
+
 # Inflate block where BTYPE == 0b00
 def inflate_block_no_compression(streamer, out_data):
 	# read_bytes will discard remaining bits after BTYPE until next byte boundary
@@ -79,6 +94,7 @@ def inflate(streamer):
 
 	return bytes(inflated_data)
 
+# Main user-facing function
 def decompress(memory):
 	streamer = ByteStreamer(memory)
 
