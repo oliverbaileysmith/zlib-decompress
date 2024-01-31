@@ -58,6 +58,54 @@ def huffman_coded_bits_to_bytes(coded_bits, n):
 	
 	return bytes(result)
 
+class HuffmanTreeNode:
+	def __init__(self):
+		self.left = None
+		self.right = None
+		self.symbol = ""
+
+class HuffmanTree:
+	def __init__(self):
+		self.root = HuffmanTreeNode()
+
+	# Insert huffman_code of length n associated with symbol into tree
+	def insert(self, huffman_code, n, symbol):
+		curr = self.root
+		for i in range(n):
+			bit = (huffman_code >> (n - i - 1)) & 1
+
+			# Follow right branch
+			if bit:
+				nxt = curr.right
+				if nxt == None:
+					curr.right = HuffmanTreeNode()
+					nxt = curr.right
+
+			# Follow left branch
+			else:
+				nxt = curr.left
+				if nxt == None:
+					curr.left = HuffmanTreeNode()
+					nxt = curr.left
+
+			curr = nxt
+
+		# Assign symbol at leaf node
+		curr.symbol = symbol
+
+# Decode a symbol from streamer using tree
+def decode_symbol(streamer, tree):
+	curr = tree.root
+
+	# Read bits and follow tree until leaf node
+	while curr.left or curr.right:
+		bit = streamer.read_bit()
+		if bit:
+			curr = curr.right
+		else:
+			curr = curr.left
+	return curr.symbol
+
 # Inflate block where BTYPE == 0b00
 def inflate_block_no_compression(streamer, out_data):
 	# read_bytes will discard remaining bits after BTYPE until next byte boundary
