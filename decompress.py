@@ -143,6 +143,30 @@ def inflate_compressed_block(streamer, literal_length_tree, distance_tree, out_d
 			for i in range(length):
 				out_data.append(out[-distance])
 
+# Construct canonical Huffman tree from alphabet and bit length list
+def huffman_tree_from_alphabet_and_bl_list(alphabet, bl_list):
+	max_bits = max(bl_list)
+
+	# Get number of codes for each bit length
+	bl_count = [0] * len(bl_list)
+	for i in range(max_bits + 1):
+		for bl in bl_list:
+			if bl == i and i != 0:
+				bl_count[i] += 1
+
+	# Compute smallest code for each bit length
+	next_code = [0, 0]
+	for bit_length in range(2, max_bits + 1):
+		next_code.append((next_code[bit_length - 1] + bl_count[bit_length - 1]) << 1)
+
+	# Construct canonical tree
+	tree = HuffmanTree()
+	for symbol, bit_length in zip(alphabet, bl_list):
+		if bit_length != 0:
+			tree.insert(next_code[bit_length], bit_length, symbol)
+			next_code[bit_length] += 1
+	return tree
+
 # Inflate block where BTYPE == 0b01
 def inflate_block_fixed_huffman(streamer, out_data):
 	return
@@ -199,7 +223,3 @@ def decompress(memory):
 	ALDER32 = streamer.read_bytes(4)
 
 	return data
-
-import zlib
-x = zlib.compress(b'The quick brown fox jumped over the lazy dog', level = 0)
-print(decompress(x))
