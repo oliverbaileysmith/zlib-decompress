@@ -43,6 +43,15 @@ class ByteStreamer:
 			bits |= self.read_bit() << i
 		return bits
 
+# Inflate block where BTYPE == 0b00
+def inflate_block_no_compression(streamer, out_data):
+	# read_bytes will discard remaining bits after BTYPE until next byte boundary
+	LEN = streamer.read_bytes(2)
+	NLEN = streamer.read_bytes(2)
+
+	for i in range(LEN):
+		out_data.append(streamer.read_byte())
+
 # Write n bits from coded_bits into bytes according to DEFLATE specification
 def huffman_coded_bits_to_bytes(coded_bits, n):
 	result = []
@@ -106,20 +115,39 @@ def decode_symbol(streamer, tree):
 			curr = curr.left
 	return curr.symbol
 
-# Inflate block where BTYPE == 0b00
-def inflate_block_no_compression(streamer, out_data):
-	# read_bytes will discard remaining bits after BTYPE until next byte boundary
-	LEN = streamer.read_bytes(2)
-	NLEN = streamer.read_bytes(2)
+# LZ77 tables
+LengthBase = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258]
+LengthExtraBits = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0]
+DistanceBase = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577]
+DistanceExtraBits = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13]
 
-	for i in range(LEN):
-		out_data.append(streamer.read_byte())
+def inflate_compressed_block(streamer, literal_length_tree, distance_tree, out_data):
+	while True:
+		symbol = decode_symbol(streamer, literal_length_tree)
+		# Handle literals
+		if symbol < 256:
+			out_data.append(symbol)
 
-#Inflate block where BTYPE == 0b01
+		# Handle end of block
+		elif symbol == 256:
+			return
+
+		# Handle <length, distance> pair
+		else:
+			# Get index into LZ77 tables
+			i = symbol - 257
+			length = LengthBase[i] + streamer.read_bits(LengthExtraBits[i])
+			symbol = decode_symbol(streamer, distance_tree)
+			distance = DistanceBase[i] + streamer.read_bits(DistanceExtraBits[i])
+			# Copy bytes indicated by <length, distance> pair
+			for i in range(length):
+				out_data.append(out[-distance])
+
+# Inflate block where BTYPE == 0b01
 def inflate_block_fixed_huffman(streamer, out_data):
 	return
 
-#Inflate block where BTYPE == 0b10
+# Inflate block where BTYPE == 0b10
 def inflate_block_dynamic_huffman(streamer, out_data):
 	return
 
