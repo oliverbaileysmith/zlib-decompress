@@ -162,10 +162,10 @@ def inflate_compressed_block(streamer, literal_length_tree, distance_tree, out_d
 			i = symbol - 257
 			length = LengthBase[i] + streamer.read_bits(LengthExtraBits[i])
 			symbol = decode_symbol(streamer, distance_tree)
-			distance = DistanceBase[i] + streamer.read_bits(DistanceExtraBits[i])
+			distance = DistanceBase[symbol] + streamer.read_bits(DistanceExtraBits[symbol])
 			# Copy bytes indicated by <length, distance> pair
 			for i in range(length):
-				out_data.append(out[-distance])
+				out_data.append(out_data[-distance])
 
 # Code length order table
 CodeLengthCodesOrder = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15]
@@ -184,7 +184,7 @@ def decode_trees(streamer):
 	# Read code lengths for the code length alphabet
 	code_length_bl_list = [0] * 19
 	for i in range(HCLEN):
-		code_length_bl_list[CodeLengthCodesOrder[i]] = r.read_bits(3)
+		code_length_bl_list[CodeLengthCodesOrder[i]] = streamer.read_bits(3)
 
 	# Construct code length tree
 	code_length_tree = huffman_tree_from_alphabet_and_bl_list(range(19), code_length_bl_list)
@@ -192,7 +192,7 @@ def decode_trees(streamer):
 	# Read literal/length + distance code length list
 	bl_list = []
 	while len(bl_list) < HLIT + HDIST:
-		symbol = decode_symbol(r, code_length_tree)
+		symbol = decode_symbol(streamer, code_length_tree)
 		assert(0 <= symbol <= 18), "Invalid symbol"
 
 		if symbol < 16: # literal value
@@ -200,17 +200,17 @@ def decode_trees(streamer):
 		elif symbol == 16:
 			# Copy previous code length 3 to 6 times
 			prev_code_length = bl_list[-1]
-			repeat_length = r.read_bits(2) + 3
+			repeat_length = streamer.read_bits(2) + 3
 			for i in range(repeat_length):
 				bl_list.append(prev_code_length)
 		elif symbol == 17:
 			# Repeat code length 0 3 to 10 times
-			repeat_length = r.read_bits(3) + 3
+			repeat_length = streamer.read_bits(3) + 3
 			for i in range(repeat_length):
 				bl_list.append(0)
 		else: # symbol == 18
 			# Repeat code length 0 11 to 138 times
-			repeat_length = r.read_bits(7) + 11
+			repeat_length = streamer.read_bits(7) + 11
 			for i in range(repeat_length):
 				bl_list.append(0)
 
@@ -221,11 +221,28 @@ def decode_trees(streamer):
 
 # Inflate block where BTYPE == 0b01
 def inflate_block_fixed_huffman(streamer, out_data):
-	return
+	# Construct fixed literal/length tree
+	bl_list = []
+	for i in range(144):
+		bl_list.append(8)
+	for i in range(144, 256):
+		bl_list.append(9) 
+	for i in range(256, 280):
+		bl_list.append(7)
+	for i in range(280, 286):
+		bl_list.append(8) 
+	literal_length_tree = huffman_tree_from_alphabet_and_bl_list(range(286), bl_list)
+
+	# Construct fixed distance tree
+	bl_list = [5] * 30
+	distance_tree = huffman_tree_from_alphabet_and_bl_list(range(30), bl_list)
+
+	inflate_compressed_block(streamer, literal_length_tree, distance_tree, out_data)
 
 # Inflate block where BTYPE == 0b10
 def inflate_block_dynamic_huffman(streamer, out_data):
-	return
+	literal_length_tree, distance_tree = decode_trees(streamer)
+	inflate_compressed_block(streamer, literal_length_tree, distance_tree, out_data)
 
 def inflate(streamer):
 	# BFINAL indicates final block in DEFLATE stream
@@ -275,3 +292,16 @@ def decompress(memory):
 	ALDER32 = streamer.read_bytes(4)
 
 	return data
+
+# Test decompress
+import zlib
+input_data = b'As noted above, encoded data blocks in the "deflate" format consist of sequences of symbols drawn from three conceptually distinct alphabets: either literal bytes, from the alphabet of byte values (0..255), or <length, backward distance> pairs, where the length is drawn from (3..258) and the distance is drawn from (1..32,768). In fact, the literal and length alphabets are merged into a single alphabet (0..285), where values 0..255 represent literal bytes, the value 256 indicates end-of-block, and values 257..285 represent length codes (possibly in conjunction with extra bits following the symbol code) as follows:'
+print("Input data:")
+print(input_data)
+print()
+
+compressed_data = zlib.compress(input_data)
+output_data = decompress(compressed_data)
+
+print("Output data:")
+print(output_data)
