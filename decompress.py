@@ -116,7 +116,7 @@ def inflate_block_fixed_huffman(stream, out_data):
 		bl_list.append(9) 
 	for i in range(256, 280):
 		bl_list.append(7)
-	for i in range(280, 286):
+	for i in range(280, 288):
 		bl_list.append(8) 
 	literal_length_tree = huffman_tree_from_alphabet_and_bl_list(range(286), bl_list)
 
